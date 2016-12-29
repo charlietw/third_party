@@ -116,13 +116,12 @@ def gconnect():
     # See if user exists, if it doesn't, make a new one.
 
     try:
-      user = getUserID(login_session['email'])
-      if user:
-        print "User already exists."
-      else:
+      user_id = getUserID(login_session['email'])
+      if not user_id:
         createUser(login_session)
-        print "Created user."
       login_session['user_id'] = user_id
+      print user_id
+      print login_session['user_id']
     except:
       print "Error"
 
@@ -185,6 +184,7 @@ def gdisconnect():
       del login_session['username']
       del login_session['email']
       del login_session['picture']
+      del login_session['user_id']
       response = make_response(json.dumps('Successfully disconnected.'), 200)
       response.headers['Content-Type'] = 'application/json'
       return response
@@ -218,7 +218,11 @@ def restaurantsJSON():
 @app.route('/restaurant/')
 def showRestaurants():
   restaurants = session.query(Restaurant).order_by(asc(Restaurant.name))
-  return render_template('restaurants.html', restaurants = restaurants)
+  print login_session
+  if 'username' not in login_session:
+    return render_template('restaurants.html', restaurants = restaurants)
+  return render_template('publicrestaurants.html', restaurants = restaurants)
+  
 
 #Create a new restaurant
 @app.route('/restaurant/new/', methods=['GET','POST'])
@@ -252,9 +256,13 @@ def editRestaurant(restaurant_id):
 def deleteRestaurant(restaurant_id):
   restaurantToDelete = session.query(Restaurant).filter_by(id = restaurant_id).one()
   if request.method == 'POST':
-    session.delete(restaurantToDelete)
-    flash('%s Successfully Deleted' % restaurantToDelete.name)
-    session.commit()
+    if 'user_id' in login_session:
+      if restaurantToDelete.user_id == login_session['user_id']:
+        session.delete(restaurantToDelete)
+        flash('%s Successfully Deleted' % restaurantToDelete.name)
+        session.commit()
+      else:
+        flash('You may only delete resaurants you have created.')
     return redirect(url_for('showRestaurants', restaurant_id = restaurant_id))
   else:
     return render_template('deleteRestaurant.html',restaurant = restaurantToDelete)
@@ -265,7 +273,11 @@ def deleteRestaurant(restaurant_id):
 def showMenu(restaurant_id):
     restaurant = session.query(Restaurant).filter_by(id = restaurant_id).one()
     items = session.query(MenuItem).filter_by(restaurant_id = restaurant_id).all()
-    return render_template('menu.html', items = items, restaurant = restaurant)
+    restaurantid = restaurant.user_id
+    if 'username' in login_session:
+      if restaurantid == login_session['user_id']:
+        return render_template('menu.html', items = items, restaurant = restaurant)
+    return render_template('publicmenu.html', items = items, restaurant = restaurant, creator = login_session)
      
 
 
